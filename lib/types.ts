@@ -82,8 +82,7 @@ export interface UserProfile {
   user_id: string;
   email: string;
   cognito_sub: string;
-  first_name: string;
-  last_name: string;
+  full_name: string;
   phone?: string;
   timezone: string;
   created_at: string;
