@@ -164,3 +164,4 @@ junit.xml
 
 # PowerShell specific
 *.ps1.bak
+req*

@@ -69,4 +69,202 @@ export interface GSIConfig {
   };
   projectionType?: dynamodb.ProjectionType;
   nonKeyAttributes?: string[];
-} 
+}
+
+/**
+ * Data model interfaces based on the technical documentation schema
+ */
+
+/**
+ * User profile data structure
+ */
+export interface UserProfile {
+  user_id: string;
+  email: string;
+  cognito_sub: string;
+  first_name: string;
+  last_name: string;
+  phone?: string;
+  timezone: string;
+  created_at: string;
+  updated_at: string;
+  last_login?: string;
+  is_active: boolean;
+  push_notifications: boolean;
+  preferred_language: string;
+  sound_alerts: boolean;
+  vibration_alerts: boolean;
+}
+
+/**
+ * Device metadata structure
+ */
+export interface DeviceMetadata {
+  device_id: string;
+  serial_number: string;
+  mac_address: string;
+  device_name: string;
+  owner_user_id: string;
+  firmware_version: string;
+  hardware_version: string;
+  is_online: boolean;
+  last_seen: string;
+  wifi_ssid: string;
+  signal_strength: number;
+  created_at: string;
+  updated_at: string;
+  is_active: boolean;
+}
+
+/**
+ * Device settings structure
+ */
+export interface DeviceSettings {
+  device_id: string;
+  sound_enabled: boolean;
+  sound_volume: number;
+  led_brightness: number;
+  notification_cooldown: number;
+  quiet_hours_enabled: boolean;
+  quiet_hours_start: string;
+  quiet_hours_end: string;
+}
+
+/**
+ * Device user permissions structure
+ */
+export interface DeviceUserPermissions {
+  device_id: string;
+  user_id: string;
+  notifications_permission: boolean;
+  settings_permission: boolean;
+  notifications_enabled: boolean;
+  notification_sound: 'default' | 'silent' | 'custom';
+  notification_vibration: boolean;
+  quiet_hours_enabled: boolean;
+  quiet_hours_start: string;
+  quiet_hours_end: string;
+  custom_notification_sound?: string;
+  device_nickname?: string;
+  invited_by: string;
+  invited_at: string;
+  accepted_at: string;
+  is_active: boolean;
+}
+
+/**
+ * Device invitation structure
+ */
+export interface DeviceInvitation {
+  invitation_id: string;
+  device_id: string;
+  invited_email: string;
+  invited_by: string;
+  invitation_token: string;
+  expires_at: string;
+  created_at: string;
+  accepted_at?: string;
+  is_accepted: boolean;
+  is_expired: boolean;
+}
+
+/**
+ * Device status structure
+ */
+export interface DeviceStatus {
+  device_id: string;
+  status_type: 'CURRENT' | 'HEALTH' | 'CONNECTIVITY';
+  timestamp: string;
+  signal_strength: number;
+  is_online: boolean;
+  memory_usage: number;
+  cpu_temperature: number;
+  uptime: number;
+  error_count: number;
+  last_error_message?: string;
+  firmware_version: string;
+}
+
+/**
+ * DynamoDB key patterns used in the schema
+ */
+export const DynamoDbKeyPatterns = {
+  // Users table
+  UserProfile: {
+    PK: (userId: string) => `USER#${userId}`,
+    SK: () => 'PROFILE',
+  },
+  
+  // Devices table
+  DeviceMetadata: {
+    PK: (deviceId: string) => `DEVICE#${deviceId}`,
+    SK: () => 'METADATA',
+  },
+  DeviceSettings: {
+    PK: (deviceId: string) => `DEVICE#${deviceId}`,
+    SK: () => 'SETTINGS',
+  },
+  
+  // DeviceUsers table
+  DeviceUser: {
+    PK: (deviceId: string) => `DEVICE#${deviceId}`,
+    SK: (userId: string) => `USER#${userId}`,
+  },
+  
+  // Invitations table
+  Invitation: {
+    PK: (invitationId: string) => `INVITATION#${invitationId}`,
+    SK: () => 'METADATA',
+  },
+  
+  // DeviceStatus table
+  DeviceStatus: {
+    PK: (deviceId: string) => `DEVICE#${deviceId}`,
+    SK: (statusType: string) => `STATUS#${statusType}`,
+  },
+} as const;
+
+/**
+ * Parameter Store path patterns
+ */
+export const ParameterStorePatterns = {
+  DynamoDbTableName: (environment: string, tableName: string) => 
+    `/acorn-pups/${environment}/dynamodb-tables/${tableName}/name`,
+  DynamoDbTableArn: (environment: string, tableName: string) => 
+    `/acorn-pups/${environment}/dynamodb-tables/${tableName}/arn`,
+} as const;
+
+/**
+ * Environment-specific configuration
+ */
+export interface EnvironmentConfig {
+  environment: string;
+  isDevelopment: boolean;
+  isProduction: boolean;
+  retentionDays: number;
+  enableDetailedMonitoring: boolean;
+  enableAlarms: boolean;
+}
+
+/**
+ * Utility type for creating environment-specific configurations
+ */
+export const createEnvironmentConfig = (environment: string): EnvironmentConfig => ({
+  environment,
+  isDevelopment: environment === 'dev',
+  isProduction: environment === 'prod',
+  retentionDays: environment === 'prod' ? 30 : 7,
+  enableDetailedMonitoring: environment === 'prod',
+  enableAlarms: environment === 'prod',
+});
+
+/**
+ * Table name patterns for consistency
+ */
+export const TableNames = {
+  Users: (environment: string) => `acorn-pups-users-${environment}`,
+  Devices: (environment: string) => `acorn-pups-devices-${environment}`,
+  DeviceUsers: (environment: string) => `acorn-pups-device-users-${environment}`,
+  Invitations: (environment: string) => `acorn-pups-invitations-${environment}`,
+  DeviceStatus: (environment: string) => `acorn-pups-device-status-${environment}`,
+} as const; 
