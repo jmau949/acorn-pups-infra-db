@@ -64,6 +64,20 @@ export class DynamoDbStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
+    // GSI2: Find user by Cognito sub
+    table.addGlobalSecondaryIndex({
+      indexName: 'GSI2',
+      partitionKey: {
+        name: 'cognito_sub',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'user_id',
+        type: dynamodb.AttributeType.STRING,
+      },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
     return table;
   }
 
