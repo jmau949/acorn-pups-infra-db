@@ -70,7 +70,7 @@ describe('DynamoDbStack', () => {
   });
 
   test('creates Global Secondary Indexes correctly', () => {
-    // Users table should have 1 GSI
+    // Users table should have 2 GSIs (email lookup and cognito_sub lookup)
     template.hasResourceProperties('AWS::DynamoDB::Table', {
       TableName: 'acorn-pups-users-test',
       GlobalSecondaryIndexes: [
@@ -78,6 +78,13 @@ describe('DynamoDbStack', () => {
           IndexName: 'GSI1',
           KeySchema: [
             { AttributeName: 'email', KeyType: 'HASH' },
+            { AttributeName: 'user_id', KeyType: 'RANGE' }
+          ]
+        },
+        {
+          IndexName: 'GSI2',
+          KeySchema: [
+            { AttributeName: 'cognito_sub', KeyType: 'HASH' },
             { AttributeName: 'user_id', KeyType: 'RANGE' }
           ]
         }

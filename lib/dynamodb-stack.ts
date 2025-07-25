@@ -45,7 +45,9 @@ export class DynamoDbStack extends cdk.Stack {
         type: dynamodb.AttributeType.STRING,
       },
       billingMode: props.dynamoDbBillingMode,
-      pointInTimeRecovery: props.enablePointInTimeRecovery,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: props.enablePointInTimeRecovery,
+      },
       deletionProtection: props.deletionProtection,
       removalPolicy: props.environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
@@ -93,7 +95,9 @@ export class DynamoDbStack extends cdk.Stack {
         type: dynamodb.AttributeType.STRING,
       },
       billingMode: props.dynamoDbBillingMode,
-      pointInTimeRecovery: props.enablePointInTimeRecovery,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: props.enablePointInTimeRecovery,
+      },
       deletionProtection: props.deletionProtection,
       removalPolicy: props.environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
@@ -141,7 +145,9 @@ export class DynamoDbStack extends cdk.Stack {
         type: dynamodb.AttributeType.STRING,
       },
       billingMode: props.dynamoDbBillingMode,
-      pointInTimeRecovery: props.enablePointInTimeRecovery,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: props.enablePointInTimeRecovery,
+      },
       deletionProtection: props.deletionProtection,
       removalPolicy: props.environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
@@ -175,7 +181,9 @@ export class DynamoDbStack extends cdk.Stack {
         type: dynamodb.AttributeType.STRING,
       },
       billingMode: props.dynamoDbBillingMode,
-      pointInTimeRecovery: props.enablePointInTimeRecovery,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: props.enablePointInTimeRecovery,
+      },
       deletionProtection: props.deletionProtection,
       removalPolicy: props.environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
@@ -223,7 +231,9 @@ export class DynamoDbStack extends cdk.Stack {
         type: dynamodb.AttributeType.STRING,
       },
       billingMode: props.dynamoDbBillingMode,
-      pointInTimeRecovery: props.enablePointInTimeRecovery,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: props.enablePointInTimeRecovery,
+      },
       deletionProtection: props.deletionProtection,
       removalPolicy: props.environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });

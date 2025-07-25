@@ -100,6 +100,7 @@ export interface UserProfile {
  */
 export interface DeviceMetadata {
   device_id: string;
+  device_instance_id: string; // UUID generated each factory reset cycle for reset security
   serial_number: string;
   mac_address: string;
   device_name: string;
@@ -112,6 +113,7 @@ export interface DeviceMetadata {
   signal_strength: number;
   created_at: string;
   updated_at: string;
+  last_reset_at?: string; // Last factory reset timestamp
   is_active: boolean;
 }
 
