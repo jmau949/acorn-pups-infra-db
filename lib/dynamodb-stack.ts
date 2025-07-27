@@ -53,24 +53,11 @@ export class DynamoDbStack extends cdk.Stack {
     });
 
     // GSI1: Find user by email
+    // Note: user_id is now the Cognito Sub UUID directly
     table.addGlobalSecondaryIndex({
       indexName: 'GSI1',
       partitionKey: {
         name: 'email',
-        type: dynamodb.AttributeType.STRING,
-      },
-      sortKey: {
-        name: 'user_id',
-        type: dynamodb.AttributeType.STRING,
-      },
-      projectionType: dynamodb.ProjectionType.ALL,
-    });
-
-    // GSI2: Find user by Cognito sub
-    table.addGlobalSecondaryIndex({
-      indexName: 'GSI2',
-      partitionKey: {
-        name: 'cognito_sub',
         type: dynamodb.AttributeType.STRING,
       },
       sortKey: {

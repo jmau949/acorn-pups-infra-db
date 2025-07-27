@@ -77,11 +77,12 @@ export interface GSIConfig {
 
 /**
  * User profile data structure
+ * Note: user_id is now the Cognito Sub UUID directly (no custom usr_ prefixed UUIDs)
+ * This eliminates the need for database lookups and simplifies API authentication
  */
 export interface UserProfile {
-  user_id: string;
+  user_id: string; // Cognito Sub UUID used directly as user identifier
   email: string;
-  cognito_sub: string;
   full_name: string;
   phone?: string;
   timezone: string;
@@ -188,11 +189,12 @@ export interface DeviceStatus {
 
 /**
  * DynamoDB key patterns used in the schema
+ * Note: userId parameter is now the Cognito Sub UUID directly (no custom usr_ prefix)
  */
 export const DynamoDbKeyPatterns = {
   // Users table
   UserProfile: {
-    PK: (userId: string) => `USER#${userId}`,
+    PK: (userId: string) => `USER#${userId}`, // userId is Cognito Sub UUID
     SK: () => 'PROFILE',
   },
   
