@@ -27,6 +27,7 @@ export class DynamoDbStack extends cdk.Stack {
       deviceUsersTable: this.createDeviceUsersTable(props),
       invitationsTable: this.createInvitationsTable(props),
       deviceStatusTable: this.createDeviceStatusTable(props),
+      userEndpointsTable: this.createUserEndpointsTable(props),
     };
 
     // Output table names and ARNs
@@ -228,6 +229,28 @@ export class DynamoDbStack extends cdk.Stack {
     return table;
   }
 
+  private createUserEndpointsTable(props: DynamoDbStackProps): dynamodb.Table {
+    const table = new dynamodb.Table(this, 'UserEndpointsTable', {
+      tableName: `acorn-pups-user-endpoints-${props.environment}`,
+      partitionKey: {
+        name: 'PK',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'SK',
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: props.dynamoDbBillingMode,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: props.enablePointInTimeRecovery,
+      },
+      deletionProtection: props.deletionProtection,
+      removalPolicy: props.environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    return table;
+  }
+
   private createOutputs(): void {
     // Create all DynamoDB table outputs with Parameter Store parameters
     this.parameterStoreHelper.createMultipleOutputsWithParameters([
@@ -309,6 +332,22 @@ export class DynamoDbStack extends cdk.Stack {
         description: 'ARN of the Device Status DynamoDB table',
         exportName: `acorn-pups-device-status-table-arn-${this.environmentName}`,
         parameterPath: `/acorn-pups/${this.environmentName}/dynamodb-tables/device-status/arn`,
+      },
+      
+      // User Endpoints Table
+      {
+        outputId: 'UserEndpointsTableName',
+        value: this.tables.userEndpointsTable.tableName,
+        description: 'Name of the User Endpoints DynamoDB table',
+        exportName: `acorn-pups-user-endpoints-table-name-${this.environmentName}`,
+        parameterPath: `/acorn-pups/${this.environmentName}/dynamodb-tables/user-endpoints/name`,
+      },
+      {
+        outputId: 'UserEndpointsTableArn',
+        value: this.tables.userEndpointsTable.tableArn,
+        description: 'ARN of the User Endpoints DynamoDB table',
+        exportName: `acorn-pups-user-endpoints-table-arn-${this.environmentName}`,
+        parameterPath: `/acorn-pups/${this.environmentName}/dynamodb-tables/user-endpoints/arn`,
       },
     ]);
   }

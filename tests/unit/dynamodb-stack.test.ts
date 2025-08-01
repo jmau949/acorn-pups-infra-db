@@ -20,8 +20,8 @@ describe('DynamoDbStack', () => {
   });
 
   test('creates all required DynamoDB tables', () => {
-    // Verify all 5 tables are created
-    template.resourceCountIs('AWS::DynamoDB::Table', 5);
+    // Verify all 6 tables are created
+    template.resourceCountIs('AWS::DynamoDB::Table', 6);
 
     // Check for Users table
     template.hasResourceProperties('AWS::DynamoDB::Table', {
@@ -67,10 +67,19 @@ describe('DynamoDbStack', () => {
         { AttributeName: 'SK', KeyType: 'RANGE' }
       ]
     });
+
+    // Check for UserEndpoints table
+    template.hasResourceProperties('AWS::DynamoDB::Table', {
+      TableName: 'acorn-pups-user-endpoints-test',
+      KeySchema: [
+        { AttributeName: 'PK', KeyType: 'HASH' },
+        { AttributeName: 'SK', KeyType: 'RANGE' }
+      ]
+    });
   });
 
   test('creates Global Secondary Indexes correctly', () => {
-    // Users table should have 2 GSIs (email lookup and cognito_sub lookup)
+    // Users table should have 1 GSI (email lookup)
     template.hasResourceProperties('AWS::DynamoDB::Table', {
       TableName: 'acorn-pups-users-test',
       GlobalSecondaryIndexes: [
@@ -78,13 +87,6 @@ describe('DynamoDbStack', () => {
           IndexName: 'GSI1',
           KeySchema: [
             { AttributeName: 'email', KeyType: 'HASH' },
-            { AttributeName: 'user_id', KeyType: 'RANGE' }
-          ]
-        },
-        {
-          IndexName: 'GSI2',
-          KeySchema: [
-            { AttributeName: 'cognito_sub', KeyType: 'HASH' },
             { AttributeName: 'user_id', KeyType: 'RANGE' }
           ]
         }
@@ -135,7 +137,7 @@ describe('DynamoDbStack', () => {
 
   test('creates Parameter Store parameters for all table outputs', () => {
     // Check that all table names and ARNs are stored in Parameter Store
-    template.resourceCountIs('AWS::SSM::Parameter', 10);
+    template.resourceCountIs('AWS::SSM::Parameter', 12);
     
     // Check some specific parameter configurations
     template.hasResourceProperties('AWS::SSM::Parameter', {

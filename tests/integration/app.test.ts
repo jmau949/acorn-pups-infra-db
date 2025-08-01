@@ -31,8 +31,8 @@ describe('Database Infrastructure Integration Tests', () => {
     const monitoringTemplate = Template.fromStack(monitoringStack);
 
     // Verify DynamoDB stack has tables and Parameter Store parameters
-    dynamoDbTemplate.resourceCountIs('AWS::DynamoDB::Table', 5);
-    dynamoDbTemplate.resourceCountIs('AWS::SSM::Parameter', 10);
+    dynamoDbTemplate.resourceCountIs('AWS::DynamoDB::Table', 6);
+    dynamoDbTemplate.resourceCountIs('AWS::SSM::Parameter', 12);
 
     // Verify monitoring stack has dashboard
     monitoringTemplate.resourceCountIs('AWS::CloudWatch::Dashboard', 1);

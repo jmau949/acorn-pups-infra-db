@@ -35,6 +35,7 @@ export interface DynamoDbTables {
   deviceUsersTable: dynamodb.Table;
   invitationsTable: dynamodb.Table;
   deviceStatusTable: dynamodb.Table;
+  userEndpointsTable: dynamodb.Table;
 }
 
 /**
@@ -188,6 +189,22 @@ export interface DeviceStatus {
 }
 
 /**
+ * User endpoint structure for push notifications
+ * Supports multi-device push notification delivery
+ */
+export interface UserEndpoint {
+  user_id: string;
+  device_fingerprint: string;
+  expo_push_token: string;
+  platform: 'ios' | 'android';
+  device_info: string;
+  is_active: boolean;
+  created_at: string;
+  last_used: string;
+  updated_at: string;
+}
+
+/**
  * DynamoDB key patterns used in the schema
  * Note: userId parameter is now the Cognito Sub UUID directly (no custom usr_ prefix)
  */
@@ -224,6 +241,12 @@ export const DynamoDbKeyPatterns = {
   DeviceStatus: {
     PK: (deviceId: string) => `DEVICE#${deviceId}`,
     SK: (statusType: string) => `STATUS#${statusType}`,
+  },
+  
+  // UserEndpoints table
+  UserEndpoint: {
+    PK: (userId: string) => `USER#${userId}`,
+    SK: (deviceFingerprint: string) => `ENDPOINT#${deviceFingerprint}`,
   },
 } as const;
 
@@ -270,4 +293,5 @@ export const TableNames = {
   DeviceUsers: (environment: string) => `acorn-pups-device-users-${environment}`,
   Invitations: (environment: string) => `acorn-pups-invitations-${environment}`,
   DeviceStatus: (environment: string) => `acorn-pups-device-status-${environment}`,
+  UserEndpoints: (environment: string) => `acorn-pups-user-endpoints-${environment}`,
 } as const; 
