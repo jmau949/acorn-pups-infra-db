@@ -36,6 +36,7 @@ export interface DynamoDbTables {
   invitationsTable: dynamodb.Table;
   deviceStatusTable: dynamodb.Table;
   userEndpointsTable: dynamodb.Table;
+  deviceLogsTable: dynamodb.Table;
 }
 
 /**
@@ -205,6 +206,22 @@ export interface UserEndpoint {
 }
 
 /**
+ * Device log structure for firmware logging and monitoring
+ * Only ERROR and FATAL logs are stored for cost optimization
+ */
+export interface DeviceLog {
+  device_id: string;
+  log_id: string;
+  timestamp: string;
+  level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'FATAL';
+  component: 'RF' | 'MQTT' | 'WIFI' | 'BUTTON' | 'SYSTEM' | 'GENERAL';
+  message: string;
+  metadata?: Record<string, any>;
+  created_at: string;
+  ttl: number; // TTL for automatic cleanup (30 days)
+}
+
+/**
  * DynamoDB key patterns used in the schema
  * Note: userId parameter is now the Cognito Sub UUID directly (no custom usr_ prefix)
  */
@@ -247,6 +264,12 @@ export const DynamoDbKeyPatterns = {
   UserEndpoint: {
     PK: (userId: string) => `USER#${userId}`,
     SK: (deviceFingerprint: string) => `ENDPOINT#${deviceFingerprint}`,
+  },
+  
+  // DeviceLogs table
+  DeviceLog: {
+    PK: (deviceId: string) => `DEVICE#${deviceId}`,
+    SK: (timestamp: string, logId: string) => `LOG#${timestamp}#${logId}`,
   },
 } as const;
 
@@ -294,4 +317,5 @@ export const TableNames = {
   Invitations: (environment: string) => `acorn-pups-invitations-${environment}`,
   DeviceStatus: (environment: string) => `acorn-pups-device-status-${environment}`,
   UserEndpoints: (environment: string) => `acorn-pups-user-endpoints-${environment}`,
+  DeviceLogs: (environment: string) => `acorn-pups-device-logs-${environment}`,
 } as const; 

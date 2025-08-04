@@ -28,6 +28,7 @@ export class DynamoDbStack extends cdk.Stack {
       invitationsTable: this.createInvitationsTable(props),
       deviceStatusTable: this.createDeviceStatusTable(props),
       userEndpointsTable: this.createUserEndpointsTable(props),
+      deviceLogsTable: this.createDeviceLogsTable(props),
     };
 
     // Output table names and ARNs
@@ -251,6 +252,58 @@ export class DynamoDbStack extends cdk.Stack {
     return table;
   }
 
+  private createDeviceLogsTable(props: DynamoDbStackProps): dynamodb.Table {
+    const table = new dynamodb.Table(this, 'DeviceLogsTable', {
+      tableName: `acorn-pups-device-logs-${props.environment}`,
+      partitionKey: {
+        name: 'PK',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'SK',
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: props.dynamoDbBillingMode,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: props.enablePointInTimeRecovery,
+      },
+      deletionProtection: props.deletionProtection,
+      removalPolicy: props.environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      // TTL attribute for automatic cleanup after 30 days
+      timeToLiveAttribute: 'ttl',
+    });
+
+    // GSI1: Query logs by level (for error analysis)
+    table.addGlobalSecondaryIndex({
+      indexName: 'GSI1',
+      partitionKey: {
+        name: 'level',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'timestamp',
+        type: dynamodb.AttributeType.STRING,
+      },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
+    // GSI2: Query logs by component (for debugging specific systems)
+    table.addGlobalSecondaryIndex({
+      indexName: 'GSI2',
+      partitionKey: {
+        name: 'component',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'timestamp',
+        type: dynamodb.AttributeType.STRING,
+      },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
+    return table;
+  }
+
   private createOutputs(): void {
     // Create all DynamoDB table outputs with Parameter Store parameters
     this.parameterStoreHelper.createMultipleOutputsWithParameters([
@@ -348,6 +401,22 @@ export class DynamoDbStack extends cdk.Stack {
         description: 'ARN of the User Endpoints DynamoDB table',
         exportName: `acorn-pups-user-endpoints-table-arn-${this.environmentName}`,
         parameterPath: `/acorn-pups/${this.environmentName}/dynamodb-tables/user-endpoints/arn`,
+      },
+      
+      // Device Logs Table
+      {
+        outputId: 'DeviceLogsTableName',
+        value: this.tables.deviceLogsTable.tableName,
+        description: 'Name of the Device Logs DynamoDB table',
+        exportName: `acorn-pups-device-logs-table-name-${this.environmentName}`,
+        parameterPath: `/acorn-pups/${this.environmentName}/dynamodb-tables/device-logs/name`,
+      },
+      {
+        outputId: 'DeviceLogsTableArn',
+        value: this.tables.deviceLogsTable.tableArn,
+        description: 'ARN of the Device Logs DynamoDB table',
+        exportName: `acorn-pups-device-logs-table-arn-${this.environmentName}`,
+        parameterPath: `/acorn-pups/${this.environmentName}/dynamodb-tables/device-logs/arn`,
       },
     ]);
   }
