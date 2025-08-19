@@ -168,6 +168,7 @@ export interface DeviceInvitation {
   expires_at: string;
   created_at: string;
   accepted_at?: string;
+  declined_at?: string;
   is_accepted: boolean;
   is_expired: boolean;
   ttl: number; // TTL for automatic cleanup after 1 year (Unix timestamp)

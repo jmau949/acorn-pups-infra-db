@@ -79,6 +79,7 @@ Table Invitations {
   expires_at varchar [note: 'Invitation expiration timestamp']
   created_at varchar [note: 'Invitation creation timestamp']
   accepted_at varchar [note: 'Invitation acceptance timestamp']
+  declined_at varchar [note: 'Invitation decline timestamp']
   is_accepted boolean [note: 'Whether invitation has been accepted']
   is_expired boolean [note: 'Whether invitation has expired']
   ttl number [note: 'TTL attribute for automatic cleanup after 1 year']
@@ -203,6 +204,7 @@ INVITATIONS Table Fields:
 - expires_at: Invitation expiration timestamp
 - created_at: Invitation creation timestamp
 - accepted_at: Invitation acceptance timestamp
+- declined_at: Invitation decline timestamp
 - is_accepted: Whether invitation has been accepted
 - is_expired: Whether invitation has expired
 - ttl: TTL attribute for automatic cleanup after 1 year (Unix timestamp)

@@ -292,6 +292,7 @@ Attributes:
 - expires_at: string (Invitation expiration timestamp)
 - created_at: string (Invitation creation timestamp)
 - accepted_at: string (Invitation acceptance timestamp)
+- declined_at: string (Invitation decline timestamp)
 - is_accepted: boolean (Whether invitation has been accepted)
 - is_expired: boolean (Whether invitation has expired)
 - ttl: number (TTL attribute for automatic cleanup after 1 year, Unix timestamp)
