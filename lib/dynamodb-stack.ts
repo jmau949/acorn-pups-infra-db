@@ -175,6 +175,8 @@ export class DynamoDbStack extends cdk.Stack {
       },
       deletionProtection: props.deletionProtection,
       removalPolicy: props.environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      // TTL attribute for automatic cleanup after 1 year
+      timeToLiveAttribute: 'ttl',
     });
 
     // GSI1: Find invitations by device

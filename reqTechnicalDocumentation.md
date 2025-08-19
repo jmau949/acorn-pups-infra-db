@@ -294,6 +294,9 @@ Attributes:
 - accepted_at: string (Invitation acceptance timestamp)
 - is_accepted: boolean (Whether invitation has been accepted)
 - is_expired: boolean (Whether invitation has expired)
+- ttl: number (TTL attribute for automatic cleanup after 1 year, Unix timestamp)
+
+TTL: 31536000 seconds (1 year retention for automatic cleanup)
 
 GSI1 (Find invitations by device):
 - GSI1PK = device_id attribute
