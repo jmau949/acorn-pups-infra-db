@@ -1,0 +1,1531 @@
+openapi: 3.0.3
+info:
+  title: Acorn Pups API
+  description: |
+    REST API for managing Acorn Pups devices and user interactions.
+    
+    This API provides endpoints for:
+    - Device registration and management with Echo/Nest-style reset security
+    - User access control and invitations
+    - Device settings and management
+    - Push notification token management for multi-device support
+    - Health monitoring
+    
+    ## Authentication
+    Most endpoints require authentication via AWS Cognito JWT tokens.
+    Include the token in the Authorization header: `Bearer <token>`
+    
+    ## User Registration
+    User accounts are created automatically via Cognito post-confirmation triggers
+    during the sign-up process. The API focuses on device and access management
+    for existing users only.
+    
+    ## Device Registration Security (Echo/Nest Pattern)
+    Device registration implements industry-standard reset security:
+    - Each factory reset generates a new device instance ID
+    - Registration requires proof of physical reset for ownership transfer
+    - Prevents remote device takeover attacks
+    - Follows Amazon Echo/Google Nest security model
+    
+    ## Rate Limiting
+    - Development: 100 requests/second, 200 burst
+    - Production: 1000 requests/second, 2000 burst
+    
+    ## System Architecture
+    - RF buttons send signals directly to ESP32 receivers (no API involvement)
+    - ESP32 receivers process button presses in real-time
+    - Push notifications sent to all authorized users via Expo Push Service
+    - Multi-device support with automatic token management
+    - No persistent storage of button press events (MVP)
+    - User creation handled by Cognito post-confirmation triggers
+    - Reset cleanup handled via HTTP registration API (no MQTT reset topics)
+    
+    ## Request Tracing
+    All requests include a unique `requestId` in responses for observability.
+    Optional correlation headers can be provided for request tracking.
+    
+  version: 1.0.0
+  contact:
+    name: Acorn Pups Team
+    email: api@acornpups.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api-dev.acornpups.com/v1
+    description: Development server
+  - url: https://api.acornpups.com/v1
+    description: Production server
+
+security:
+  - CognitoAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns API health status and basic information
+      tags:
+        - System
+      security: [] # No authentication required
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/ClientVersion'
+      responses:
+        '200':
+          description: API is healthy
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                data:
+                  status: "healthy"
+                  timestamp: "2024-01-15T10:30:00Z"
+                  environment: "production"
+                  version: "1.0.0"
+                  region: "us-west-2"
+                  checks:
+                    api: true
+                    lambda: true
+                    dynamodb: true
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+        '500':
+          description: API is unhealthy
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "service_unavailable"
+                message: "API is temporarily unavailable"
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+
+  /devices/register:
+    post:
+      summary: Register device with Echo/Nest-style reset security
+      description: |
+        Register a new ESP32 receiver device or transfer ownership after factory reset.
+        
+        This endpoint implements Echo/Nest-style reset security:
+        - For new devices: Normal registration with new device instance ID
+        - For existing devices: Requires proof of factory reset (new device instance ID + factory_reset state)
+        - Prevents remote takeover by validating physical reset occurred
+        - Automatically handles certificate revocation and ownership transfer
+        
+        The authenticated user (identified by JWT token) must already exist in the 
+        Users table before calling this endpoint.
+        
+        **Reset Security Flow:**
+        1. Factory reset generates new deviceInstanceId
+        2. Registration includes deviceInstanceId and deviceState
+        3. Backend validates reset proof and handles ownership transfer
+        4. Old certificates revoked, new certificates issued
+      tags:
+        - Device Management
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/ClientVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceRegistrationRequest'
+            example:
+              deviceId: "acorn-receiver-001"
+              deviceInstanceId: "inst-123e4567-e89b-12d3-a456-426614174000"
+              deviceName: "Living Room Receiver"
+              serialNumber: "SN123456789"
+              macAddress: "AA:BB:CC:DD:EE:FF"
+              deviceState: "factory_reset"
+              resetTimestamp: "2025-07-25T10:30:00Z"
+      responses:
+        '201':
+          description: Device registered successfully (new device or ownership transferred)
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceRegistrationResponse'
+              example:
+                data:
+                  deviceId: "acorn-receiver-001"
+                  deviceInstanceId: "inst-123e4567-e89b-12d3-a456-426614174000"
+                  deviceName: "Living Room Receiver"
+                  serialNumber: "SN123456789"
+                  ownerId: "user-123e4567-e89b-12d3-a456-426614174000"
+                  registeredAt: "2024-01-15T10:30:00Z"
+                  lastResetAt: "2025-07-25T10:30:00Z"
+                  ownershipTransferred: true
+                  status: "active"
+                  certificates:
+                    deviceCertificate: "-----BEGIN CERTIFICATE-----\nMIIBIjANBgkqhkiG9w0BAQEFA..."
+                    privateKey: "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC..."
+                    iotEndpoint: "a1b2c3d4e5f6g7-ats.iot.us-west-2.amazonaws.com"
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+        '400':
+          description: Invalid request data
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+              example:
+                error: "validation_failed"
+                message: "Request validation failed"
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+                validationErrors:
+                  - field: "deviceInstanceId"
+                    message: "Device instance ID is required"
+                  - field: "macAddress"
+                    message: "Invalid MAC address format"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Device already exists without valid reset proof
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceConflictResponse'
+              example:
+                error: "device_already_registered"
+                message: "Device already registered to another user. Factory reset required for ownership transfer."
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+                resetInstructions:
+                  - "Press and hold the reset button on the device for 5 seconds"
+                  - "Wait for the device LED to blink blue (setup mode)"
+                  - "Try registration again through the mobile app"
+                supportUrl: "https://help.acornpups.com/reset-device"
+
+  /users/{userId}/devices:
+    get:
+      summary: Get user's devices
+      description: Retrieve all devices accessible by the specified user
+      tags:
+        - Device Management
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "user-123e4567-e89b-12d3-a456-426614174000"
+          description: User ID
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/ClientVersion'
+      responses:
+        '200':
+          description: List of user's devices
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDevicesResponse'
+              example:
+                data:
+                  devices:
+                    - deviceId: "acorn-receiver-001"
+                      deviceInstanceId: "inst-123e4567-e89b-12d3-a456-426614174000"
+                      deviceName: "Living Room Receiver"
+                      serialNumber: "SN123456789"
+                      isOnline: true
+                      lastSeen: "2024-01-15T10:25:00Z"
+                      registeredAt: "2024-01-15T10:30:00Z"
+                      lastResetAt: "2025-07-25T10:30:00Z"
+                      firmwareVersion: "1.2.3"
+                      settings:
+                        soundEnabled: true
+                        soundVolume: 7
+                        ledBrightness: 5
+                        notificationCooldown: 30
+                        quietHoursEnabled: true
+                        quietHoursStart: "22:00"
+                        quietHoursEnd: "07:00"
+                      permissions:
+                        notifications: true
+                        settings: true
+                  total: 1
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/UserNotFound'
+
+  /devices/{deviceId}/settings:
+    put:
+      summary: Update device settings
+      description: Update configuration settings for a specific ESP32 receiver device
+      tags:
+        - Device Management
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "acorn-receiver-001"
+          description: Device ID
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/ClientVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceSettingsRequest'
+            example:
+              soundEnabled: true
+              soundVolume: 8
+              ledBrightness: 6
+              notificationCooldown: 30
+              quietHoursEnabled: true
+              quietHoursStart: "22:00"
+              quietHoursEnd: "07:00"
+      responses:
+        '200':
+          description: Settings updated successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceSettingsResponse'
+              example:
+                data:
+                  soundEnabled: true
+                  soundVolume: 8
+                  ledBrightness: 6
+                  notificationCooldown: 30
+                  quietHoursEnabled: true
+                  quietHoursStart: "22:00"
+                  quietHoursEnd: "07:00"
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+        '400':
+          description: Invalid settings data
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+              example:
+                error: "validation_failed"
+                message: "Invalid settings provided"
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+                validationErrors:
+                  - field: "soundVolume"
+                    message: "Volume must be between 1 and 10"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/DeviceNotFound'
+
+  /devices/{deviceId}/invite:
+    post:
+      summary: Invite user to device
+      description: Send an invitation to a user to access a device
+      tags:
+        - User Management
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "acorn-receiver-001"
+          description: Device ID
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/ClientVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserInviteRequest'
+            example:
+              email: "friend@example.com"
+              notificationsPermission: true
+              settingsPermission: false
+      responses:
+        '201':
+          description: Invitation sent successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInviteResponse'
+              example:
+                data:
+                  invitationId: "inv-123e4567-e89b-12d3-a456-426614174000"
+                  email: "friend@example.com"
+                  deviceId: "acorn-receiver-001"
+                  deviceName: "Living Room Receiver"
+                  notificationsPermission: true
+                  settingsPermission: false
+                  expiresAt: "2024-01-22T10:30:00Z"
+                  sentAt: "2024-01-15T10:30:00Z"
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+        '400':
+          description: Invalid invitation request
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+              example:
+                error: "validation_failed"
+                message: "Invalid invitation data"
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+                validationErrors:
+                  - field: "email"
+                    message: "Invalid email format"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/DeviceNotFound'
+
+  /devices/{deviceId}/users/{userId}:
+    delete:
+      summary: Remove user access from device
+      description: Remove a user's access to a device
+      tags:
+        - User Management
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "acorn-receiver-001"
+          description: Device ID
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "user-123e4567-e89b-12d3-a456-426614174000"
+          description: User ID to remove
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/ClientVersion'
+      responses:
+        '204':
+          description: User access removed successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/DeviceOrUserNotFound'
+
+  /users/{userId}/invitations:
+    get:
+      summary: Get user's pending invitations
+      description: Retrieve all pending device invitations for the specified user
+      tags:
+        - User Management
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "user-123e4567-e89b-12d3-a456-426614174000"
+          description: User ID
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/ClientVersion'
+      responses:
+        '200':
+          description: List of user's pending invitations
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInvitationsResponse'
+              example:
+                data:
+                  invitations:
+                    - invitationId: "inv-123e4567-e89b-12d3-a456-426614174000"
+                      deviceId: "acorn-receiver-001"
+                      deviceName: "Living Room Receiver"
+                      invitedBy: "owner@example.com"
+                      notificationsPermission: true
+                      settingsPermission: false
+                      createdAt: "2024-01-15T10:30:00Z"
+                      expiresAt: "2024-01-22T10:30:00Z"
+                  total: 1
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/UserNotFound'
+
+  /users/{userId}/push-tokens:
+    post:
+      summary: Register or update push notification token
+      description: |
+        Register a new push notification token or update an existing one for a user's device.
+        
+        This endpoint implements minimal proactive token management:
+        - Called on app launch when token changes
+        - Called after app installation when user grants notification permissions
+        - Updates existing token if device fingerprint matches
+        - Creates new endpoint record for new devices
+        
+        The device fingerprint ensures stable device identification across token changes.
+      tags:
+        - Push Notifications
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "user-123e4567-e89b-12d3-a456-426614174000"
+          description: User ID
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/ClientVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushTokenRequest'
+            example:
+              expoPushToken: "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]"
+              deviceFingerprint: "ios-iPhone15Pro-12345678"
+              platform: "ios"
+              deviceInfo: "iPhone 15 Pro (iOS 17.2)"
+      responses:
+        '200':
+          description: Push token registered or updated successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushTokenResponse'
+              example:
+                data:
+                  userId: "user-123e4567-e89b-12d3-a456-426614174000"
+                  deviceFingerprint: "ios-iPhone15Pro-12345678"
+                  action: "updated"
+                  message: "Push token updated successfully"
+                  tokenChanged: true
+                  isActive: true
+                  registeredAt: "2024-01-15T10:30:00Z"
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+        '400':
+          description: Invalid push token data
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+              example:
+                error: "validation_failed"
+                message: "Invalid push token format"
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+                validationErrors:
+                  - field: "expoPushToken"
+                    message: "Invalid Expo push token format"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/UserNotFound'
+
+  /invitations/{invitationId}/accept:
+    post:
+      summary: Accept device invitation
+      description: Accept an invitation to access a device
+      tags:
+        - User Management
+      parameters:
+        - name: invitationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "inv-123e4567-e89b-12d3-a456-426614174000"
+          description: Invitation ID
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/ClientVersion'
+      responses:
+        '200':
+          description: Invitation accepted successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationActionResponse'
+              example:
+                data:
+                  invitationId: "inv-123e4567-e89b-12d3-a456-426614174000"
+                  action: "accepted"
+                  message: "Invitation accepted successfully"
+                  processedAt: "2024-01-15T10:30:00Z"
+                  deviceId: "acorn-receiver-001"
+                  deviceName: "Living Room Receiver"
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/InvitationNotFound'
+        '409':
+          description: Invitation already processed
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "invitation_already_processed"
+                message: "This invitation has already been processed"
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+
+  /invitations/{invitationId}/decline:
+    post:
+      summary: Decline device invitation
+      description: Decline an invitation to access a device
+      tags:
+        - User Management
+      parameters:
+        - name: invitationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "inv-123e4567-e89b-12d3-a456-426614174000"
+          description: Invitation ID
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/ClientVersion'
+      responses:
+        '200':
+          description: Invitation declined successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationActionResponse'
+              example:
+                data:
+                  invitationId: "inv-123e4567-e89b-12d3-a456-426614174000"
+                  action: "declined"
+                  message: "Invitation declined successfully"
+                  processedAt: "2024-01-15T10:30:00Z"
+                  deviceId: "acorn-receiver-001"
+                  deviceName: "Living Room Receiver"
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/InvitationNotFound'
+        '409':
+          description: Invitation already processed
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "invitation_already_processed"
+                message: "This invitation has already been processed"
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+
+components:
+  securitySchemes:
+    CognitoAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: AWS Cognito JWT token
+
+  parameters:
+    CorrelationId:
+      name: X-Correlation-ID
+      in: header
+      schema:
+        type: string
+        format: uuid
+        example: "corr-123e4567-e89b-12d3-a456-426614174000"
+      description: Optional correlation ID for request tracking across services
+      
+    ClientVersion:
+      name: X-Client-Version
+      in: header
+      schema:
+        type: string
+        pattern: '^\d+\.\d+\.\d+$'
+        example: "1.2.3"
+      description: Mobile app version for compatibility tracking
+
+  headers:
+    X-Request-ID:
+      description: Request identifier for traceability
+      schema:
+        type: string
+        format: uuid
+        example: "req-123e4567-e89b-12d3-a456-426614174000"
+    X-API-Version:
+      description: API version used for this request
+      schema:
+        type: string
+        example: "1.0.0"
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+        X-API-Version:
+          $ref: '#/components/headers/X-API-Version'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "unauthorized"
+            message: "Authentication required"
+            requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+    
+    Forbidden:
+      description: Insufficient permissions
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+        X-API-Version:
+          $ref: '#/components/headers/X-API-Version'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "forbidden"
+            message: "Insufficient permissions to access this resource"
+            requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+
+    UserNotFound:
+      description: User not found
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+        X-API-Version:
+          $ref: '#/components/headers/X-API-Version'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "user_not_found"
+            message: "User not found"
+            requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+
+    DeviceNotFound:
+      description: Device not found
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+        X-API-Version:
+          $ref: '#/components/headers/X-API-Version'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "device_not_found"
+            message: "Device not found"
+            requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+
+    DeviceOrUserNotFound:
+      description: Device or user not found
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+        X-API-Version:
+          $ref: '#/components/headers/X-API-Version'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "resource_not_found"
+            message: "Device or user not found"
+            requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+
+    InvitationNotFound:
+      description: Invitation not found or expired
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+        X-API-Version:
+          $ref: '#/components/headers/X-API-Version'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "invitation_not_found"
+            message: "Invitation not found or has expired"
+            requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          description: Response data
+        requestId:
+          type: string
+          format: uuid
+          description: Unique request identifier
+          example: "req-123e4567-e89b-12d3-a456-426614174000"
+      required:
+        - data
+        - requestId
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error code
+          example: "validation_failed"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Request validation failed"
+        requestId:
+          type: string
+          format: uuid
+          description: Unique request identifier
+          example: "req-123e4567-e89b-12d3-a456-426614174000"
+      required:
+        - error
+        - message
+        - requestId
+
+    ValidationErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            validationErrors:
+              type: array
+              description: Array of validation errors
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                    description: Field name that failed validation
+                    example: "deviceInstanceId"
+                  message:
+                    type: string
+                    description: Validation error message
+                    example: "Device instance ID is required"
+                required:
+                  - field
+                  - message
+
+    DeviceConflictResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            resetInstructions:
+              type: array
+              description: Step-by-step reset instructions for user
+              items:
+                type: string
+              example:
+                - "Press and hold the reset button on the device for 5 seconds"
+                - "Wait for the device LED to blink blue (setup mode)"
+                - "Try registration again through the mobile app"
+            supportUrl:
+              type: string
+              format: uri
+              description: URL to device reset documentation
+              example: "https://help.acornpups.com/reset-device"
+
+    HealthResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [healthy, unhealthy]
+                  example: "healthy"
+                timestamp:
+                  type: string
+                  format: date-time
+                  example: "2024-01-15T10:30:00Z"
+                environment:
+                  type: string
+                  example: "production"
+                version:
+                  type: string
+                  example: "1.0.0"
+                region:
+                  type: string
+                  example: "us-west-2"
+                checks:
+                  type: object
+                  properties:
+                    api:
+                      type: boolean
+                      example: true
+                    lambda:
+                      type: boolean
+                      example: true
+                    dynamodb:
+                      type: boolean
+                      example: true
+              required:
+                - status
+                - timestamp
+                - environment
+                - version
+                - region
+                - checks
+
+    DeviceRegistrationRequest:
+      type: object
+      properties:
+        deviceId:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: '^[a-zA-Z0-9\-_]+$'
+          description: Unique device identifier for ESP32 receiver
+          example: "acorn-receiver-001"
+        deviceInstanceId:
+          type: string
+          format: uuid
+          description: UUID generated each factory reset cycle for security validation
+          example: "inst-123e4567-e89b-12d3-a456-426614174000"
+        deviceName:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: '^[a-zA-Z0-9\s\-_.]+$'
+          description: Human-readable device name
+          example: "Living Room Receiver"
+        serialNumber:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: '^[A-Z0-9]+$'
+          description: Hardware serial number
+          example: "SN123456789"
+        macAddress:
+          type: string
+          pattern: '^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
+          description: Device MAC address
+          example: "AA:BB:CC:DD:EE:FF"
+        deviceState:
+          type: string
+          enum: [normal, factory_reset]
+          description: Device state indicating if factory reset occurred
+          example: "factory_reset"
+        resetTimestamp:
+          type: string
+          format: date-time
+          description: Timestamp when factory reset occurred (ISO 8601 format)
+          example: "2025-07-25T10:30:00Z"
+      required:
+        - deviceId
+        - deviceInstanceId
+        - deviceName
+        - serialNumber
+        - macAddress
+        - deviceState
+
+    DeviceRegistrationResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                deviceId:
+                  type: string
+                  example: "acorn-receiver-001"
+                deviceInstanceId:
+                  type: string
+                  format: uuid
+                  example: "inst-123e4567-e89b-12d3-a456-426614174000"
+                deviceName:
+                  type: string
+                  example: "Living Room Receiver"
+                serialNumber:
+                  type: string
+                  example: "SN123456789"
+                ownerId:
+                  type: string
+                  format: uuid
+                  example: "user-123e4567-e89b-12d3-a456-426614174000"
+                registeredAt:
+                  type: string
+                  format: date-time
+                  example: "2024-01-15T10:30:00Z"
+                lastResetAt:
+                  type: string
+                  format: date-time
+                  description: Timestamp of last factory reset
+                  example: "2025-07-25T10:30:00Z"
+                ownershipTransferred:
+                  type: boolean
+                  description: Whether ownership was transferred from previous owner
+                  example: true
+                status:
+                  type: string
+                  enum: [pending, active]
+                  example: "active"
+                certificates:
+                  type: object
+                  properties:
+                    deviceCertificate:
+                      type: string
+                      description: AWS IoT Core device certificate (PEM format)
+                      example: "-----BEGIN CERTIFICATE-----\nMIIBIjANBgkqhkiG9w0BAQEFA..."
+                    privateKey:
+                      type: string
+                      description: Device private key (PEM format)
+                      example: "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC..."
+                    iotEndpoint:
+                      type: string
+                      description: AWS IoT Core endpoint URL
+                      example: "a1b2c3d4e5f6g7-ats.iot.us-west-2.amazonaws.com"
+                  required:
+                    - deviceCertificate
+                    - privateKey
+                    - iotEndpoint
+              required:
+                - deviceId
+                - deviceInstanceId
+                - deviceName
+                - serialNumber
+                - ownerId
+                - registeredAt
+                - ownershipTransferred
+                - status
+                - certificates
+
+    Device:
+      type: object
+      properties:
+        deviceId:
+          type: string
+          example: "acorn-receiver-001"
+        deviceInstanceId:
+          type: string
+          format: uuid
+          description: Current device instance ID (changes on factory reset)
+          example: "inst-123e4567-e89b-12d3-a456-426614174000"
+        deviceName:
+          type: string
+          example: "Living Room Receiver"
+        serialNumber:
+          type: string
+          example: "SN123456789"
+        isOnline:
+          type: boolean
+          example: true
+        lastSeen:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:25:00Z"
+        registeredAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        lastResetAt:
+          type: string
+          format: date-time
+          description: Timestamp of last factory reset
+          example: "2025-07-25T10:30:00Z"
+        firmwareVersion:
+          type: string
+          example: "1.2.3"
+        settings:
+          $ref: '#/components/schemas/DeviceSettings'
+        permissions:
+          type: object
+          properties:
+            notifications:
+              type: boolean
+              example: true
+            settings:
+              type: boolean
+              example: true
+          required:
+            - notifications
+            - settings
+      required:
+        - deviceId
+        - deviceInstanceId
+        - deviceName
+        - serialNumber
+        - isOnline
+        - lastSeen
+        - registeredAt
+        - firmwareVersion
+        - settings
+        - permissions
+
+    DeviceSettings:
+      type: object
+      properties:
+        soundEnabled:
+          type: boolean
+          description: Whether device makes sounds
+          example: true
+        soundVolume:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: Device sound volume (1-10 scale)
+          example: 7
+        ledBrightness:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: LED brightness level (1-10 scale)
+          example: 5
+        notificationCooldown:
+          type: integer
+          minimum: 0
+          maximum: 300
+          description: Seconds between notifications
+          example: 30
+        quietHoursEnabled:
+          type: boolean
+          description: Whether quiet hours are active
+          example: true
+        quietHoursStart:
+          type: string
+          pattern: '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+          example: "22:00"
+          description: Time to stop ringing locally (24-hour format)
+        quietHoursEnd:
+          type: string
+          pattern: '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+          example: "07:00"
+          description: Time to resume ringing locally (24-hour format)
+      required:
+        - soundEnabled
+        - soundVolume
+        - ledBrightness
+        - notificationCooldown
+        - quietHoursEnabled
+
+    UserDevicesResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                devices:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Device'
+                total:
+                  type: integer
+                  example: 1
+              required:
+                - devices
+                - total
+
+    DeviceSettingsRequest:
+      type: object
+      properties:
+        soundEnabled:
+          type: boolean
+          example: true
+        soundVolume:
+          type: integer
+          minimum: 1
+          maximum: 10
+          example: 7
+        ledBrightness:
+          type: integer
+          minimum: 1
+          maximum: 10
+          example: 5
+        notificationCooldown:
+          type: integer
+          minimum: 0
+          maximum: 300
+          example: 30
+        quietHoursEnabled:
+          type: boolean
+          example: true
+        quietHoursStart:
+          type: string
+          pattern: '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+          example: "22:00"
+        quietHoursEnd:
+          type: string
+          pattern: '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+          example: "07:00"
+
+    DeviceSettingsResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/DeviceSettings'
+
+    UserInviteRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 5
+          maxLength: 254
+          description: Email address of user to invite
+          example: "friend@example.com"
+        notificationsPermission:
+          type: boolean
+          description: Can receive notifications from this device
+          default: true
+          example: true
+        settingsPermission:
+          type: boolean
+          description: Can modify device settings
+          default: false
+          example: false
+      required:
+        - email
+
+    UserInviteResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                invitationId:
+                  type: string
+                  format: uuid
+                  example: "inv-123e4567-e89b-12d3-a456-426614174000"
+                email:
+                  type: string
+                  format: email
+                  example: "friend@example.com"
+                deviceId:
+                  type: string
+                  example: "acorn-receiver-001"
+                deviceName:
+                  type: string
+                  example: "Living Room Receiver"
+                notificationsPermission:
+                  type: boolean
+                  example: true
+                settingsPermission:
+                  type: boolean
+                  example: false
+                expiresAt:
+                  type: string
+                  format: date-time
+                  example: "2024-01-22T10:30:00Z"
+                sentAt:
+                  type: string
+                  format: date-time
+                  example: "2024-01-15T10:30:00Z"
+              required:
+                - invitationId
+                - email
+                - deviceId
+                - deviceName
+                - notificationsPermission
+                - settingsPermission
+                - expiresAt
+                - sentAt
+
+    Invitation:
+      type: object
+      properties:
+        invitationId:
+          type: string
+          format: uuid
+          example: "inv-123e4567-e89b-12d3-a456-426614174000"
+        deviceId:
+          type: string
+          example: "acorn-receiver-001"
+        deviceName:
+          type: string
+          example: "Living Room Receiver"
+        invitedBy:
+          type: string
+          description: Name/email of user who sent invitation
+          example: "owner@example.com"
+        notificationsPermission:
+          type: boolean
+          example: true
+        settingsPermission:
+          type: boolean
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2024-01-22T10:30:00Z"
+      required:
+        - invitationId
+        - deviceId
+        - deviceName
+        - invitedBy
+        - notificationsPermission
+        - settingsPermission
+        - createdAt
+        - expiresAt
+
+    UserInvitationsResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                invitations:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Invitation'
+                total:
+                  type: integer
+                  example: 1
+              required:
+                - invitations
+                - total
+
+    InvitationActionResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                invitationId:
+                  type: string
+                  format: uuid
+                  example: "inv-123e4567-e89b-12d3-a456-426614174000"
+                action:
+                  type: string
+                  enum: [accepted, declined]
+                  example: "accepted"
+                message:
+                  type: string
+                  example: "Invitation accepted successfully"
+                processedAt:
+                  type: string
+                  format: date-time
+                  example: "2024-01-15T10:30:00Z"
+                deviceId:
+                  type: string
+                  example: "acorn-receiver-001"
+                deviceName:
+                  type: string
+                  example: "Living Room Receiver"
+              required:
+                - invitationId
+                - action
+                - message
+                - processedAt
+                - deviceId
+                - deviceName
+
+    PushTokenRequest:
+      type: object
+      properties:
+        expoPushToken:
+          type: string
+          pattern: '^ExponentPushToken\[.+\]$'
+          description: Expo push notification token
+          example: "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]"
+        deviceFingerprint:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Stable device identifier (platform-model-installationId)
+          example: "ios-iPhone15Pro-12345678"
+        platform:
+          type: string
+          enum: [ios, android]
+          description: Device platform
+          example: "ios"
+        deviceInfo:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Human-readable device information
+          example: "iPhone 15 Pro (iOS 17.2)"
+      required:
+        - expoPushToken
+        - deviceFingerprint
+        - platform
+        - deviceInfo
+
+    PushTokenResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+                  example: "user-123e4567-e89b-12d3-a456-426614174000"
+                deviceFingerprint:
+                  type: string
+                  example: "ios-iPhone15Pro-12345678"
+                action:
+                  type: string
+                  enum: [created, updated, unchanged]
+                  description: Action taken on the push token
+                  example: "updated"
+                message:
+                  type: string
+                  example: "Push token updated successfully"
+                tokenChanged:
+                  type: boolean
+                  description: Whether the token was actually changed
+                  example: true
+                isActive:
+                  type: boolean
+                  description: Whether the endpoint is active
+                  example: true
+                registeredAt:
+                  type: string
+                  format: date-time
+                  example: "2024-01-15T10:30:00Z"
+              required:
+                - userId
+                - deviceFingerprint
+                - action
+                - message
+                - tokenChanged
+                - isActive
+                - registeredAt
+
+tags:
+  - name: System
+    description: System health
+  - name: Device Management
+    description: Device registration, settings, and management
+  - name: User Management
+    description: User invitations and access control
+  - name: Push Notifications
+    description: Push notification token management

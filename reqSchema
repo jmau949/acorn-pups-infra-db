@@ -1,0 +1,374 @@
+// Acorn Pups DynamoDB Schema
+// Import this file into dbdiagram.io to visualize the actual data structure
+
+Table Users {
+  PK varchar [pk, note: 'Primary key: USER#{user_id}']
+  SK varchar [note: 'Sort key: PROFILE']
+  user_id varchar [note: 'Cognito Sub UUID used directly as user identifier']
+  email varchar [unique, note: 'User email address (unique)']
+  full_name varchar [note: 'User full name']
+  phone varchar [note: 'User phone number']
+  timezone varchar [note: 'User timezone (default: UTC)']
+  created_at varchar [note: 'Account creation timestamp (ISO format)']
+  updated_at varchar [note: 'Last profile update timestamp']
+  last_login varchar [note: 'Last login timestamp']
+  is_active boolean [note: 'Whether user account is active']
+  push_notifications boolean [note: 'Global push notification preference']
+  preferred_language varchar [note: 'User preferred app language']
+  sound_alerts boolean [note: 'Global sound alert preference']
+  vibration_alerts boolean [note: 'Global vibration alert preference']
+}
+
+Table Devices {
+  PK varchar [pk, note: 'Primary key: DEVICE#{device_id}']
+  SK varchar [note: 'Sort key: METADATA or SETTINGS']
+  device_id varchar [note: 'Unique UUID for the smart receiver']
+  device_instance_id varchar [note: 'UUID generated each factory reset cycle - for reset security']
+  serial_number varchar [unique, note: 'Hardware serial number (unique)']
+  mac_address varchar [note: 'Receiver MAC address']
+  device_name varchar [note: 'User-friendly name (e.g. Living Room Receiver)']
+  owner_user_id varchar [note: 'Cognito Sub UUID of device owner']
+  firmware_version varchar [note: 'Current receiver firmware version']
+  hardware_version varchar [note: 'Hardware revision']
+  is_online boolean [note: 'Current connectivity status']
+  last_seen varchar [note: 'Last communication timestamp']
+  wifi_ssid varchar [note: 'Connected WiFi network name']
+  signal_strength number [note: 'WiFi signal strength in dBm']
+  created_at varchar [note: 'Device registration timestamp']
+  updated_at varchar [note: 'Last metadata update timestamp']
+  last_reset_at varchar [note: 'Last factory reset timestamp']
+  is_active boolean [note: 'Whether device is active/enabled']
+  sound_enabled boolean [note: 'Whether device makes sounds']
+  sound_volume number [note: 'Device sound volume (1-10 scale)']
+  led_brightness number [note: 'LED brightness level (1-10 scale)']
+  notification_cooldown number [note: 'Seconds between notifications']
+  quiet_hours_enabled boolean [note: 'Whether quiet hours are active for local ringer']
+  quiet_hours_start varchar [note: 'Time to stop ringing locally (e.g. 22:00)']
+  quiet_hours_end varchar [note: 'Time to resume ringing locally (e.g. 07:00)']
+}
+
+Table DeviceUsers {
+  PK varchar [pk, note: 'Primary key: DEVICE#{device_id}']
+  SK varchar [note: 'Sort key: USER#{user_id}']
+  device_id varchar [note: 'UUID of the device']
+  user_id varchar [note: 'Cognito Sub UUID of user with access']
+  notifications_permission boolean [note: 'Can receive notifications']
+  settings_permission boolean [note: 'Can modify device settings']
+  notifications_enabled boolean [note: 'User wants notifications from this device']
+  notification_sound varchar [note: 'default, silent, or custom']
+  notification_vibration boolean [note: 'Enable vibration for notifications']
+  quiet_hours_enabled boolean [note: 'User has quiet hours set']
+  quiet_hours_start varchar [note: 'User quiet hours start time (HH:MM)']
+  quiet_hours_end varchar [note: 'User quiet hours end time (HH:MM)']
+  custom_notification_sound varchar [note: 'URL to custom sound file']
+  device_nickname varchar [note: 'User custom name for device']
+  invited_by varchar [note: 'Cognito Sub UUID of user who sent invitation']
+  invited_at varchar [note: 'Invitation sent timestamp']
+  accepted_at varchar [note: 'Invitation accepted timestamp']
+  is_active boolean [note: 'Whether access permission is active']
+}
+
+Table Invitations {
+  PK varchar [pk, note: 'Primary key: INVITATION#{invitation_id}']
+  SK varchar [note: 'Sort key: METADATA']
+  invitation_id varchar [note: 'Unique UUID for invitation']
+  device_id varchar [note: 'UUID of device being shared']
+  invited_email varchar [note: 'Email address of invited user']
+  invited_by varchar [note: 'Cognito Sub UUID of user sending invitation']
+  invitation_token varchar [note: 'Unique token for accepting invitation']
+  expires_at varchar [note: 'Invitation expiration timestamp']
+  created_at varchar [note: 'Invitation creation timestamp']
+  accepted_at varchar [note: 'Invitation acceptance timestamp']
+  is_accepted boolean [note: 'Whether invitation has been accepted']
+  is_expired boolean [note: 'Whether invitation has expired']
+}
+
+Table DeviceStatus {
+  PK varchar [pk, note: 'Primary key: DEVICE#{device_id}']
+  SK varchar [note: 'Sort key: STATUS#{status_type}']
+  device_id varchar [note: 'UUID of the device']
+  status_type varchar [note: 'Type: CURRENT, HEALTH, CONNECTIVITY']
+  timestamp varchar [note: 'Status report timestamp']
+  signal_strength number [note: 'WiFi signal strength at report time']
+  is_online boolean [note: 'Whether device was online']
+  memory_usage number [note: 'Device memory usage percentage']
+  cpu_temperature number [note: 'Device CPU temperature in Celsius']
+  uptime number [note: 'Device uptime in seconds']
+  error_count number [note: 'Number of errors since last report']
+  last_error_message varchar [note: 'Most recent error message']
+  firmware_version varchar [note: 'Firmware version at report time']
+}
+
+Table UserEndpoints {
+  PK varchar [pk, note: 'Primary key: USER#{user_id}']
+  SK varchar [note: 'Sort key: ENDPOINT#{device_fingerprint}']
+  user_id varchar [note: 'Cognito Sub UUID of the user']
+  device_fingerprint varchar [note: 'Stable device identifier (platform-model-installationId)']
+  expo_push_token varchar [note: 'Expo push notification token']
+  platform varchar [note: 'Device platform (ios/android)']
+  device_info varchar [note: 'Human-readable device information']
+  is_active boolean [note: 'Whether the endpoint is active']
+  created_at varchar [note: 'Endpoint creation timestamp']
+  last_used varchar [note: 'Last successful notification delivery']
+  updated_at varchar [note: 'Last token update timestamp']
+}
+
+// Relationships
+Ref: Users.user_id > Devices.owner_user_id
+Ref: Devices.device_id > DeviceUsers.device_id
+Ref: Users.user_id > DeviceUsers.user_id
+Ref: Devices.device_id > Invitations.device_id
+Ref: Users.user_id > Invitations.invited_by
+Ref: Devices.device_id > DeviceStatus.device_id
+Ref: Users.user_id > UserEndpoints.user_id
+
+/*
+===========================================
+FIELD DESCRIPTIONS
+===========================================
+
+USERS Table Fields:
+- PK: Primary key, format "USER#{user_id}"
+- SK: Sort key, value "PROFILE"
+- user_id: Cognito Sub UUID used directly as user identifier
+- email: User's email address (unique)
+- full_name: User's full name
+- phone: User's phone number
+- timezone: User's timezone (default: "UTC")
+- created_at: Account creation timestamp (ISO format)
+- updated_at: Last profile update timestamp
+- last_login: Last login timestamp
+- is_active: Whether user account is active
+- push_notifications: Global push notification preference
+- preferred_language: User's preferred app language
+- sound_alerts: Global sound alert preference
+- vibration_alerts: Global vibration alert preference
+
+DEVICES Table Fields (Smart Receivers):
+- PK: Primary key, format "DEVICE#{device_id}"
+- SK: Sort key, values "METADATA" or "SETTINGS"
+- device_id: Unique UUID for the smart receiver
+- device_instance_id: UUID generated each factory reset cycle for reset security
+- serial_number: Hardware serial number (unique)
+- mac_address: Receiver MAC address
+- device_name: User-friendly device name (e.g. "Living Room Receiver")
+- owner_user_id: Cognito Sub UUID of the device owner
+- firmware_version: Current receiver firmware version
+- hardware_version: Hardware revision
+- is_online: Current connectivity status
+- last_seen: Last communication timestamp
+- wifi_ssid: Connected WiFi network name
+- signal_strength: WiFi signal strength in dBm
+- created_at: Device registration timestamp
+- updated_at: Last metadata update timestamp
+- last_reset_at: Last factory reset timestamp
+- is_active: Whether device is active/enabled
+- sound_enabled: Whether device makes sounds
+- sound_volume: Device sound volume (1-10 scale)
+- led_brightness: LED brightness level (1-10 scale)
+- notification_cooldown: Seconds between notifications
+- quiet_hours_enabled: Whether quiet hours are active for local ringer
+- quiet_hours_start: Time to stop ringing locally (e.g. "22:00")
+- quiet_hours_end: Time to resume ringing locally (e.g. "07:00")
+
+DEVICEUSERS Table Fields (Junction Table):
+- PK: Primary key, format "DEVICE#{device_id}"
+- SK: Sort key, format "USER#{user_id}"
+- device_id: UUID of the device
+- user_id: Cognito Sub UUID of the user with access
+- notifications_permission: Can receive notifications
+- settings_permission: Can modify device settings
+- notifications_enabled: User wants notifications from this device
+- notification_sound: "default", "silent", or "custom"
+- notification_vibration: Enable vibration for notifications
+- quiet_hours_enabled: User has quiet hours set
+- quiet_hours_start: User's quiet hours start time (HH:MM)
+- quiet_hours_end: User's quiet hours end time (HH:MM)
+- custom_notification_sound: URL to custom sound file
+- device_nickname: User's custom name for device
+- invited_by: Cognito Sub UUID of user who sent the invitation
+- invited_at: Invitation sent timestamp
+- accepted_at: Invitation accepted timestamp
+- is_active: Whether this access permission is active
+
+INVITATIONS Table Fields:
+- PK: Primary key, format "INVITATION#{invitation_id}"
+- SK: Sort key, value "METADATA"
+- invitation_id: Unique UUID for the invitation
+- device_id: UUID of device being shared
+- invited_email: Email address of invited user
+- invited_by: Cognito Sub UUID of user sending invitation
+- invitation_token: Unique token for accepting invitation
+- expires_at: Invitation expiration timestamp
+- created_at: Invitation creation timestamp
+- accepted_at: Invitation acceptance timestamp
+- is_accepted: Whether invitation has been accepted
+- is_expired: Whether invitation has expired
+
+DEVICESTATUS Table Fields:
+- PK: Primary key, format "DEVICE#{device_id}"
+- SK: Sort key, format "STATUS#{status_type}"
+- device_id: UUID of the device
+- status_type: Type of status ("CURRENT", "HEALTH", "CONNECTIVITY")
+- timestamp: Status report timestamp
+- signal_strength: WiFi signal strength at time of report
+- is_online: Whether device was online
+- memory_usage: Device memory usage percentage
+- cpu_temperature: Device CPU temperature in Celsius
+- uptime: Device uptime in seconds
+- error_count: Number of errors since last report
+- last_error_message: Most recent error message
+- firmware_version: Firmware version at time of report
+
+USERENDPOINTS Table Fields (Push Notification Tokens):
+- PK: Primary key, format "USER#{user_id}"
+- SK: Sort key, format "ENDPOINT#{device_fingerprint}"
+- user_id: Cognito Sub UUID of the user
+- device_fingerprint: Stable device identifier (e.g., "ios-iPhone15Pro-12345678")
+- expo_push_token: Expo push notification token (e.g., "ExponentPushToken[xxxxxx]")
+- platform: Device platform ("ios" or "android")
+- device_info: Human-readable device information (e.g., "iPhone 15 Pro (iOS 17.2)")
+- is_active: Whether the endpoint is active (set to false after delivery failures)
+- created_at: Endpoint creation timestamp
+- last_used: Last successful notification delivery timestamp
+- updated_at: Last token update timestamp
+
+===========================================
+DYNAMODB KEY STRUCTURES AND GSI MAPPINGS
+===========================================
+
+USERS Table:
+Main Table:
+- PK = "USER#{user_id}" (where user_id is Cognito Sub)
+- SK = "PROFILE"
+
+GSI1 (Find user by email):
+- GSI1PK = email attribute
+- GSI1SK = user_id attribute
+
+===========================================
+
+DEVICES Table (Smart Receivers):
+Main Table:
+- PK = "DEVICE#{device_id}"
+- SK = "METADATA" or "SETTINGS"
+
+GSI1 (Find devices by owner):
+- GSI1PK = owner_user_id attribute (Cognito Sub)
+- GSI1SK = device_id attribute
+
+GSI2 (Find device by serial):
+- GSI2PK = serial_number attribute
+- GSI2SK = device_id attribute
+
+===========================================
+
+DEVICEUSERS Table:
+Main Table:
+- PK = "DEVICE#{device_id}"
+- SK = "USER#{user_id}" (where user_id is Cognito Sub)
+
+GSI1 (Find user's device access):
+- GSI1PK = user_id attribute (Cognito Sub)
+- GSI1SK = device_id attribute
+
+===========================================
+
+INVITATIONS Table:
+Main Table:
+- PK = "INVITATION#{invitation_id}"
+- SK = "METADATA"
+
+GSI1 (Find invitations by device):
+- GSI1PK = device_id attribute
+- GSI1SK = created_at attribute
+
+GSI2 (Find invitations by email):
+- GSI2PK = invited_email attribute
+- GSI2SK = created_at attribute
+
+===========================================
+
+DEVICESTATUS Table:
+Main Table:
+- PK = "DEVICE#{device_id}"
+- SK = "STATUS#{status_type}"
+
+===========================================
+
+USERENDPOINTS Table:
+Main Table:
+- PK = "USER#{user_id}" (where user_id is Cognito Sub)
+- SK = "ENDPOINT#{device_fingerprint}"
+
+===========================================
+
+ACCESS PATTERNS:
+
+1. Get user profile by Cognito Sub:
+   Query: PK = "USER#{cognito_sub}" AND SK = "PROFILE"
+
+2. Find user by email:
+   Query GSI1: GSI1PK = "john@example.com"
+
+3. Get user's devices:
+   Query GSI1: GSI1PK = "{cognito_sub}" (user_id)
+
+4. Get device metadata:
+   Query: PK = "DEVICE#456" AND SK = "METADATA"
+
+5. Get device settings:
+   Query: PK = "DEVICE#456" AND SK = "SETTINGS"
+
+6. Find device by serial number (for reset validation):
+   Query GSI2: GSI2PK = "SN123456" (serial_number)
+
+7. Get device users:
+   Query: PK = "DEVICE#456" AND SK begins_with "USER#"
+
+8. Get user's device permissions:
+   Query GSI1: GSI1PK = "{cognito_sub}" (user_id)
+
+9. Get current device status:
+   Query: PK = "DEVICE#456" AND SK = "STATUS#CURRENT"
+
+10. Get invitation by ID:
+    Query: PK = "INVITATION#inv123"
+
+11. Get device invitations:
+    Query GSI1: GSI1PK = "456" (device_id)
+
+12. Get user's pending invitations:
+    Query GSI2: GSI2PK = "jane@example.com" (invited_email)
+
+13. Get all push endpoints for a user:
+    Query: PK = "USER#{cognito_sub}" AND SK begins_with "ENDPOINT#"
+
+14. Get specific push endpoint by device fingerprint:
+    Query: PK = "USER#{cognito_sub}" AND SK = "ENDPOINT#{device_fingerprint}"
+
+===========================================
+
+DESIGN NOTES:
+
+1. **Simplified User ID**: Cognito Sub used directly as user_id eliminates database lookups
+2. **No cognito_sub Field**: Removed redundant field and GSI2 for cognito_sub lookups
+3. **Direct JWT Integration**: API Lambdas can extract user_id directly from JWT sub claim
+4. **Echo/Nest Pattern**: Industry-standard reset validation approach
+5. **Reset Security**: Device Instance ID prevents remote takeover attacks
+6. **Reset Timestamp**: Track when factory resets occur for auditing
+7. **Single Cleanup Path**: Simplified architecture with one reset mechanism
+8. **Physical Access Required**: Only physical reset button can generate new instance ID
+9. **Ownership Transfer**: Automatic cleanup when legitimate reset is detected
+10. **Security Validation**: Reject registration without valid reset proof
+11. **Idempotent Operations**: Same instance ID registration succeeds (already owned)
+
+The direct use of Cognito Sub as user_id enables:
+- Elimination of database lookups for user identification
+- Direct extraction of user_id from JWT tokens in API calls
+- Simplified mobile app integration (no extra API calls needed)
+- Reduced latency and improved performance
+- Lower operational costs through fewer database operations
+
+===========================================
+*/
