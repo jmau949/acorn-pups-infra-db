@@ -643,7 +643,7 @@ The registration process uses AWS IoT Core's built-in certificate generation:
 1. **Screen Load**: User opens device list or device detail screen
 2. **Initial API Call**: `GET /users/{userId}/devices` returns devices with current status
 3. **UI Display**: Shows online/offline status with last seen timestamp
-4. **Periodic Refresh**: 
+4. **Periodic Refresh**:
    - While screen is active: API call every 60 seconds
    - Background/other screens: No polling (conserves battery)
 5. **Status Update**: UI automatically reflects any status changes from periodic refresh
@@ -651,6 +651,7 @@ The registration process uses AWS IoT Core's built-in certificate generation:
 #### Future Enhancement: On-Demand Status Check
 
 If 60-second refresh proves insufficient, we can add:
+
 1. **User Action**: Tap "Refresh" button in app
 2. **MQTT Request**: Publish to `acorn-pups/status-request/{clientId}`
 3. **Device Response**: ESP32 responds with detailed status to `acorn-pups/status-response/{clientId}`
@@ -738,6 +739,7 @@ acorn-pups/logs/{clientId}                # Device logs from receiver (device to
 ```
 
 **AWS IoT Lifecycle Events** (automatic system topics):
+
 ```
 $aws/events/presence/connected/{clientId}     # Device connection event
 $aws/events/presence/disconnected/{clientId}  # Device disconnection event
@@ -950,11 +952,38 @@ $aws/events/presence/disconnected/{clientId}  # Device disconnection event
 
 #### Current NVS Namespaces
 
-- **Main Device Data** (`acorn_device`): Wiped during factory reset
-  - WiFi credentials
-  - Device certificates
-  - Device identity
-  - Device settings
+- **WiFi Configuration** (`wifi_config`): Wiped during factory reset
+
+  - WiFi SSID and password
+  - Authentication token from BLE provisioning
+  - Device name and user timezone
+  - Timestamp of configuration
+
+- **MQTT Certificates** (`mqtt_certs`): Wiped during factory reset
+
+  - AWS IoT device certificate (X.509 PEM)
+  - Device private key (RSA PEM)
+  - AWS IoT endpoint URL
+  - Certificate metadata
+
+- **Device Settings** (`device_settings`): Wiped during factory reset
+
+  - Sound enabled/disabled
+  - Sound volume level
+  - LED brightness
+  - Notification cooldown period
+  - Quiet hours configuration
+
+- **Registration State** (`reg_state`): Wiped during factory reset
+
+  - Device registration metadata
+  - Owner ID and device ID mapping
+  - Registration timestamp
+
+- **Factory Calibration** (`factory_cal`): Persistent across resets
+  - Hardware calibration data
+  - RF sensitivity offset
+  - Audio gain multiplier
 
 #### New Reset State Storage
 
@@ -998,7 +1027,10 @@ void factoryReset() {
     nvs_close(resetHandle);
 
     // 3. Wipe main device data
-    nvs_erase_namespace("acorn_device");
+    nvs_erase_namespace("wifi_config");
+    nvs_erase_namespace("mqtt_certs");
+    nvs_erase_namespace("device_settings");
+    nvs_erase_namespace("reg_state");
 
     // 4. Enter BLE setup mode
     startBLEProvisioning();
@@ -1085,3 +1117,4 @@ void registerDevice() {
 2. **Prevents Remote Takeover**: Requires physical access to reset
 3. **Simplifies Operations**: Single HTTP-based cleanup mechanism
 4. **Follows Industry Standards**: Same pattern as Echo, Nest, and enterprise IoT
+
