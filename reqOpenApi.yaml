@@ -263,6 +263,7 @@ paths:
                       registeredAt: "2024-01-15T10:30:00Z"
                       lastResetAt: "2025-07-25T10:30:00Z"
                       firmwareVersion: "1.2.3"
+                      ownerId: "08919370-a031-70ec-1c7d-3c01ddf8b380"
                       settings:
                         soundEnabled: true
                         soundVolume: 7
@@ -435,6 +436,130 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/DeviceNotFound'
+
+  /devices/{deviceId}/users:
+    get:
+      summary: Get all users with access to a specific device
+      description: |
+        Returns a list of all users who have access to the specified device.
+        Only device owners or users with settings permission can view the user list.
+        Used for device sharing UI to display current members.
+      tags:
+        - User Management
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "acorn-receiver-001"
+          description: Device ID
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/ClientVersion'
+      responses:
+        '200':
+          description: Device users retrieved successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            X-API-Version:
+              $ref: '#/components/headers/X-API-Version'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      users:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            userId:
+                              type: string
+                              format: uuid
+                              description: User's unique identifier
+                              example: "user-123e4567-e89b-12d3-a456-426614174000"
+                            email:
+                              type: string
+                              format: email
+                              description: User's email address
+                              example: "john.doe@example.com"
+                            fullName:
+                              type: string
+                              description: User's full name
+                              example: "John Doe"
+                            role:
+                              type: string
+                              enum: [owner, member]
+                              description: User's role on the device
+                              example: "member"
+                            permissions:
+                              type: object
+                              properties:
+                                notifications:
+                                  type: boolean
+                                  description: Whether user can receive notifications
+                                  example: true
+                                settings:
+                                  type: boolean
+                                  description: Whether user can modify device settings
+                                  example: false
+                              required: [notifications, settings]
+                            joinedAt:
+                              type: string
+                              format: date-time
+                              description: When the user joined the device (ISO 8601)
+                              example: "2024-01-15T10:30:00Z"
+                            isActive:
+                              type: boolean
+                              description: Whether the user's access is currently active
+                              example: true
+                          required: [userId, email, fullName, role, permissions, joinedAt, isActive]
+                      total:
+                        type: integer
+                        description: Total number of users with access to the device
+                        example: 3
+                    required: [users, total]
+                  requestId:
+                    type: string
+                    format: uuid
+                    example: "req-123e4567-e89b-12d3-a456-426614174000"
+                required: [data, requestId]
+              example:
+                data:
+                  users:
+                    - userId: "user-123e4567-e89b-12d3-a456-426614174000"
+                      email: "owner@example.com"
+                      fullName: "Device Owner"
+                      role: "owner"
+                      permissions:
+                        notifications: true
+                        settings: true
+                      joinedAt: "2024-01-10T08:00:00Z"
+                      isActive: true
+                    - userId: "user-987f6543-c21b-43d2-b654-321098765432"
+                      email: "member@example.com"
+                      fullName: "Family Member"
+                      role: "member"
+                      permissions:
+                        notifications: true
+                        settings: false
+                      joinedAt: "2024-01-15T10:30:00Z"
+                      isActive: true
+                  total: 2
+                requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/DeviceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
   /devices/{deviceId}/users/{userId}:
     delete:
@@ -1147,6 +1272,11 @@ components:
         firmwareVersion:
           type: string
           example: "1.2.3"
+        ownerId:
+          type: string
+          format: uuid
+          description: User ID of the device owner (Cognito sub)
+          example: "08919370-a031-70ec-1c7d-3c01ddf8b380"
         settings:
           $ref: '#/components/schemas/DeviceSettings'
         permissions:
@@ -1170,6 +1300,7 @@ components:
         - lastSeen
         - registeredAt
         - firmwareVersion
+        - ownerId
         - settings
         - permissions
 

@@ -45,6 +45,7 @@
 - `inviteUser`: Create invitation and send email
 - `acceptInvitation`: Process invitation acceptance and create DeviceUsers entries
 - `declineInvitation`: Process invitation decline
+- `getDeviceUsers`: Get all users with access to a specific device (for device sharing UI)
 - `removeUserAccess`: Remove user permissions
 - `processDeviceLogs`: Process device logs from MQTT, route ERROR/FATAL to CloudWatch Alarms, store critical logs in DynamoDB
 
@@ -68,6 +69,7 @@
 - `GET /users/{userId}/devices` - Retrieve user's devices
 - `PUT /devices/{deviceId}/settings` - Update device configuration
 - `POST /devices/{deviceId}/invite` - Send invitation to user
+- `GET /devices/{deviceId}/users` - Get all users with access to a specific device
 - `POST /invitations/{invitationId}/accept` - Accept device invitation
 - `POST /invitations/{invitationId}/decline` - Decline device invitation
 - `GET /users/{userId}/invitations` - Get pending invitations for user
