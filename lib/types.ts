@@ -153,7 +153,6 @@ export interface DeviceUserPermissions {
   invited_by: string;
   invited_at: string;
   accepted_at: string;
-  is_active: boolean;
 }
 
 /**

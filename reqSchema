@@ -65,7 +65,6 @@ Table DeviceUsers {
   invited_by varchar [note: 'Cognito Sub UUID of user who sent invitation']
   invited_at varchar [note: 'Invitation sent timestamp']
   accepted_at varchar [note: 'Invitation accepted timestamp']
-  is_active boolean [note: 'Whether access permission is active']
 }
 
 Table Invitations {
@@ -191,7 +190,6 @@ DEVICEUSERS Table Fields (Junction Table):
 - invited_by: Cognito Sub UUID of user who sent the invitation
 - invited_at: Invitation sent timestamp
 - accepted_at: Invitation accepted timestamp
-- is_active: Whether this access permission is active
 
 INVITATIONS Table Fields:
 - PK: Primary key, format "INVITATION#{invitation_id}"
